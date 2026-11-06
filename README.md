@@ -23,7 +23,7 @@
 
 1. **Клонируйте репозиторий:**
 ```bash
-git clone https://github.com/ваш_ник/bzd-bot.git
+git clone https://github.com/bzd-bot-booting/bzd-bot.git
 cd bzd-bot
 ```
    
