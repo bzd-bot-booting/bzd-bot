@@ -1,6 +1,5 @@
 FROM python:3.12-slim
 
-# Устанавливаем системные зависимости, необходимые для работы Chromium в Linux
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libnspr4 \
@@ -21,10 +20,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Скачиваем браузер Chromium для Playwright
 RUN playwright install chromium
 
 COPY . .
 
-# Запускаем бота
 CMD ["python", "bot_auto.py"]
