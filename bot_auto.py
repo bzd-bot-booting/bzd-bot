@@ -29,7 +29,7 @@ from playwright.async_api import async_playwright
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # ==================== КОНФИГУРАЦИЯ ====================
-API_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+API_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "your-telegram-toccen")
 HEADLESS = True
 CHECK_INTERVAL = 30
 # =====================================================
@@ -550,7 +550,8 @@ async def get_trains_data(dialog_manager: DialogManager, **kwargs):
         else:
             status = "🔴 Нет мест"
 
-        text = f"{t['index']}. {t['number']} ({t['time']}) {status}"
+        # ДОБАВЛЕНО ВРЕМЯ ПРИБЫТИЯ (arr_time) В ОБЩИЙ СПИСОК
+        text = f"{t['index']}. {t['number']} ({t['time']} — {t['arr_time']}) {status}"
         items.append((text, str(t["index"])))
 
     return {
@@ -641,7 +642,8 @@ async def on_train_selected(
         alt_items = []
         for alt in alternatives:
             details = ", ".join(f"{k}({v})" for k, v in alt["details"].items())
-            text = f"{alt['index']}. {alt['number']} ({alt['time']}) 🟢 {details}"
+            # ДОБАВЛЕНО ВРЕМЯ ПРИБЫТИЯ (arr_time) В СПИСОК АЛЬТЕРНАТИВ
+            text = f"{alt['index']}. {alt['number']} ({alt['time']} — {alt['arr_time']}) 🟢 {details}"
             alt_items.append((text, str(alt["index"])))
 
         if monitor_key in active_monitors:
@@ -847,7 +849,6 @@ booking_dialog = Dialog(
         getter=get_monitoring_info_data,
     ),
     
-    # Экран результата, где кнопка Назад теперь вызывает on_back_to_trains
     Window(
         Format("{result_text}"),
         Url(Const("🎫 Выбрать место"), url=Format("{base_link}")),
