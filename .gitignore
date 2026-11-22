@@ -1,20 +1,10 @@
-# Виртуальное окружение
-venv/
-env/
-.venv/
+.env
+.env.*
+!.env.example
 
-# Кэш Python
+.venv/
+venv/
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Переменные окружения (если будете использовать .env)
-.env
-
-# Файлы IDE (редакторов кода)
-.vscode/
-.idea/
-
-# Логи и временные файлы
+.pytest_cache/
 *.log
-*.png

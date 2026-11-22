@@ -1,27 +1,20 @@
-FROM python:3.12-slim
+FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
 
-RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    SERVICE_NAME=bzhd_bot
+
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt .
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN playwright install chromium
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY main.py ./main.py
 
-COPY . .
-
-CMD ["python", "bot_auto.py"]
+RUN mkdir -p /var/log/bzhd_bot && chmod 0777 /var/log/bzhd_bot
+CMD ["python", "main.py"]

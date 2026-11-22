@@ -1,0 +1,31 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: bzhd_bot
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: bzhd_bot
+          service_name: bzhd_bot
+          __path__: /var/log/bzhd_bot/*.json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            logger: logger
+            event: event
+            stage: stage
+      - labels:
+          level:
+          logger:
+          event:
+          stage:

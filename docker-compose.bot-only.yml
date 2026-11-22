@@ -1,0 +1,29 @@
+# Режим для сервера, где PostgreSQL, Promtail, Loki и Grafana УЖЕ установлены.
+# В .env обязательно укажи DATABASE_URL существующей БД.
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bzhd-bot
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      SERVICE_NAME: bzhd_bot
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: /var/log/bzhd_bot/app.json.log
+      HEALTH_FILE: /tmp/bzhd_bot_heartbeat
+      TZ: ${TZ:-Europe/Vilnius}
+    volumes:
+      - ./logs:/var/log/bzhd_bot
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time,sys; p='/tmp/bzhd_bot_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<100 else 1)"]
+      interval: 45s
+      timeout: 5s
+      retries: 3
+      start_period: 120s

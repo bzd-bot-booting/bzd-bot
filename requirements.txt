@@ -1,3 +1,10 @@
-aiogram
-aiogram-dialog
-playwright
+aiogram==3.22.0
+aiogram-dialog==2.4.0
+SQLAlchemy==2.0.44
+asyncpg==0.30.0
+alembic==1.17.1
+playwright==1.55.0
+pydantic==2.11.10
+pydantic-core==2.33.2
+cryptography==50.0.2
+python-dotenv==1.1.1
