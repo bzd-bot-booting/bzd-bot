@@ -1,0 +1,29 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data and logs (mounted at runtime)
+data/
+logs/
+*.log
+
+# VCS and editor files
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Local archives and backups
+*.zip
+*.dump
+*.bak
