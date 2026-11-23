@@ -115,6 +115,69 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+HELP_TEXT = (
+    "ℹ️ <b>ПОДРОБНАЯ СПРАВКА</b>\n"
+    "━━━━━━━━━━━━━━━━━━\n\n"
+
+    "🔎 <b>1. Поиск билетов</b>\n"
+    "Нажми «Найти билеты» в главном меню. Укажи станцию отправления, "
+    "станцию назначения, дату поездки и количество билетов. Затем выбери "
+    "подходящий поезд и доступные варианты мест.\n\n"
+
+    "💰 <b>2. Максимальная цена</b>\n"
+    "При новом поиске или создании мониторинга укажи максимальную стоимость "
+    "одного билета. Это ограничение применяется к каждому билету отдельно. "
+    "Для новой заявки цену нужно указать заново. У уже созданного мониторинга "
+    "свой лимит сохраняется.\n\n"
+
+    "🚆 <b>3. Результаты поиска</b>\n"
+    "Проверяй номер поезда, маршрут, время отправления и прибытия, тип вагона, "
+    "доступность мест и стоимость. Информация о наличии мест может измениться "
+    "до момента оформления заказа.\n\n"
+
+    "📋 <b>4. Мои мониторинги</b>\n"
+    "Здесь можно просматривать свои заявки и открывать их подробности. "
+    "В зависимости от состояния мониторинга доступны просмотр истории, "
+    "изменение максимальной цены, управление данными пассажира, остановка, "
+    "возобновление и удаление заявки.\n\n"
+
+    "🔔 <b>5. Уведомления</b>\n"
+    "Бот сообщает о ходе мониторинга и появлении подходящих мест. "
+    "Важно: сообщение о найденных местах ещё не означает, что билет оформлен. "
+    "Заказ считается созданным только после подтверждения на сайте "
+    "pass.rw.by.\n\n"
+
+    "🎫 <b>6. Автоматическое оформление</b>\n"
+    "Следуй инструкциям бота: авторизуйся на сайте, выбери тип вагона "
+    "и места, затем заполни данные пассажира. Внимательно проверяй введённые "
+    "сведения перед подтверждением.\n\n"
+
+    "⏱ <b>7. Оплата заказа</b>\n"
+    "После успешного оформления бот отправит уведомление. Обычно на оплату "
+    "остаётся около 20 минут. Точный срок проверяй в сообщении бота и на сайте.\n\n"
+
+    "⚠️ <b>8. Важные замечания</b>\n"
+    "• Найденное место не гарантирует успешное оформление.\n"
+    "• Проверяй данные пассажиров и параметры поездки.\n"
+    "• Если результат оформления неизвестен, проверь историю заказов "
+    "на pass.rw.by перед повторной попыткой.\n"
+    "• Мониторинги хранятся в базе данных и восстанавливаются после "
+    "перезапуска бота.\n\n"
+
+    "Выбери действие ниже."
+)
+
+
+def help_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="help:back")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="help:cancel")],
+            [InlineKeyboardButton(text="🏠 Домой", callback_data="help:home")],
+        ]
+    )
+
+
 def main_menu_text(first_name: str | None = None) -> str:
     """Текст главного меню."""
 
@@ -345,15 +408,7 @@ async def on_menu_stop(callback, button, dialog_manager):
 
 
 async def on_menu_help(callback, button, dialog_manager):
-    await callback.answer(
-        "Выбери поиск билетов или открой раздел «Мои мониторинги».",
-        show_alert=True,
-    )
-
-
-# ---------------------------------------------------------------------
-# Управление мониторингами в одном окне aiogram-dialog
-# ---------------------------------------------------------------------
+    await _open_help_message(callback, dialog_manager)
 
 def _dialog_chat_id(dialog_manager: DialogManager) -> int:
     event = dialog_manager.event
@@ -1169,34 +1224,61 @@ async def on_monitor_price_input(message, message_input, dialog_manager):
     await dialog_manager.switch_to(BookingSG.monitor_details)
 
 
-async def cb_help(callback: CallbackQuery):
+async def _open_help_message(
+    callback: CallbackQuery,
+    dialog_manager: DialogManager,
+) -> None:
+    """Отправляет отдельное сообщение справки и удаляет прежнее меню."""
     await callback.answer()
 
     if not isinstance(callback.message, Message):
         return
 
-    text = (
-        "ℹ️ <b>Как пользоваться ботом</b>\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "🔎 <b>Найти билеты</b>\n"
-        "Выбери станции отправления и назначения, "
-        "дату, поезд и количество билетов. "
-        "Затем укажи максимальную цену одного билета.\n\n"
-        "📋 <b>Активные мониторинги</b>\n"
-        "Здесь отображаются активные заявки, "
-        "количество билетов и установленный ценовой лимит.\n\n"
-        "🛑 <b>Остановить мониторинги</b>\n"
-        "Отменяет все твои активные заявки.\n\n"
-        "💡 <b>Важно:</b> бот сохраняет мониторинги "
-        "в базе данных и восстанавливает их после перезапуска."
-    )
-
+    # Сначала отправляем справку, чтобы не потерять меню при ошибке отправки.
     await callback.message.answer(
-        text,
-        reply_markup=main_menu_keyboard(),
+        HELP_TEXT,
+        reply_markup=help_keyboard(),
         parse_mode="HTML",
     )
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        logger.warning("Не удалось удалить меню после открытия справки", exc_info=True)
+
+
+async def _close_help_message(
+    callback: CallbackQuery,
+    dialog_manager: DialogManager,
+) -> None:
+    """Закрывает справку и возвращает меню без отмены текущих операций."""
+    messages = {
+        "help:back": "Возвращаюсь в главное меню.",
+        "help:cancel": "Справка закрыта.",
+        "help:home": "Открываю главное меню.",
+    }
+
+    await callback.answer(messages.get(callback.data, "Главное меню"))
+
+    if isinstance(callback.message, Message):
+        try:
+            await callback.message.delete()
+        except Exception:
+            logger.warning("Не удалось удалить сообщение справки", exc_info=True)
+
+    # SEND нужен, поскольку сообщение предыдущего диалога уже удалено.
+    dialog_manager.show_mode = ShowMode.SEND
+    await dialog_manager.start(
+        BookingSG.main_menu,
+        mode=StartMode.RESET_STACK,
+    )
+
+
+async def cb_help(
+    callback: CallbackQuery,
+    dialog_manager: DialogManager,
+):
+    await _open_help_message(callback, dialog_manager)
 
 async def cb_menu(
     callback: CallbackQuery,
@@ -1327,6 +1409,10 @@ def register_commands(router: Router):
     router.callback_query.register(
         cb_help,
         F.data == "menu:help",
+    )
+    router.callback_query.register(
+        _close_help_message,
+        F.data.in_({"help:back", "help:cancel", "help:home"}),
     )
     router.callback_query.register(
         cb_menu,
