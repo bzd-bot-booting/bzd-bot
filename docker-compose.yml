@@ -21,6 +21,7 @@ services:
 
   bot:
     image: bzhdbot/bzhd-bot:latest
+    pull_policy: always
     container_name: bzhd-bot
     restart: unless-stopped
     init: true
