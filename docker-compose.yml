@@ -20,9 +20,7 @@ services:
     networks: [backend, observability]
 
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: bzhdbot/bzhd-bot:latest
     container_name: bzhd-bot
     restart: unless-stopped
     init: true
