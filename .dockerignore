@@ -1,7 +1,13 @@
-# Secrets
+# Secrets and local environment
 .env
 .env.*
 !.env.example
+
+# Runtime data and logs
+data/
+logs/
+*.log
+bot_debug.log
 
 # Python environments and caches
 .venv/
@@ -12,18 +18,11 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# Local data and logs (mounted at runtime)
-data/
-logs/
-*.log
-
-# VCS and editor files
+# VCS, editor files, archives and backups
 .git/
 .gitignore
 .idea/
 .vscode/
-
-# Local archives and backups
 *.zip
 *.dump
 *.bak
