@@ -1,5 +1,3 @@
-name: bzhd-stack
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-bzhd_bot}
-      POSTGRES_USER: ${POSTGRES_USER:-bzhd_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-bzhd_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       TZ: ${TZ:-Europe/Vilnius}
     volumes:
@@ -17,17 +15,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [backend, observability]
+      start_period: 10s
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot:
-    image: bzhdbot/bzhd-bot:latest
-    pull_policy: always
+    image: bzhd-bot:server
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: bzhd-bot
     restart: unless-stopped
     init: true
-    env_file: .env
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bzhd_bot}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bzhd_bot}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       SERVICE_NAME: bzhd_bot
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FILE: /var/log/bzhd_bot/app.json.log
@@ -40,62 +48,27 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import os,time,sys; p='/tmp/bzhd_bot_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<100 else 1)"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,time,sys; p='/tmp/bzhd_bot_heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<100 else 1)"
       interval: 45s
       timeout: 5s
       retries: 3
       start_period: 120s
-    networks: [backend]
-
-  loki:
-    image: grafana/loki:3.5.0
-    container_name: bzhd-loki
-    restart: unless-stopped
-    command: -config.file=/etc/loki/config.yml
-    volumes:
-      - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
-      - loki_data:/loki
-    ports:
-      - "127.0.0.1:3100:3100"
-    networks: [observability]
-
-  promtail:
-    image: grafana/promtail:3.5.0
-    container_name: bzhd-promtail
-    restart: unless-stopped
-    command: -config.file=/etc/promtail/config.yml
-    volumes:
-      - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
-      - bot_logs:/var/log/bzhd_bot:ro
-      - promtail_positions:/var/lib/promtail
-    depends_on: [loki]
-    networks: [observability]
-
-  grafana:
-    image: grafana/grafana:11.6.0
-    container_name: bzhd-grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      TZ: ${TZ:-Europe/Vilnius}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on: [loki]
-    networks: [observability]
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
 volumes:
   postgres_data:
   bot_logs:
-  loki_data:
-  promtail_positions:
-  grafana_data:
 
 networks:
   backend:
-  observability:
+    driver: bridge

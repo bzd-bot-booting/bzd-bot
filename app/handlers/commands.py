@@ -1,6 +1,9 @@
 
 import logging
 import uuid
+import json
+import os
+from pathlib import Path
 from html import escape
 
 from aiogram import F, Router
@@ -10,6 +13,7 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    BufferedInputFile,
 )
 from aiogram_dialog import DialogManager, StartMode, ShowMode
 from aiogram_dialog.widgets.kbd import Button
@@ -17,11 +21,13 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.states import BookingSG
+from app.config import load_settings
+from app.core.redaction import redact_sensitive_text
 from app.database.models import BookingJob, Notification
 from app.services.monitor_profiles import MonitorProfileService
 from app.services.booking_jobs import BookingJobsService
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from app.database.engine import SessionFactory
 from app.database.models import User, Monitor, Subscription
 from app.middlewares.message_cleanup import clear_chat_messages, active_dialog_message_id
@@ -115,57 +121,63 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-HELP_TEXT = (
-    "ℹ️ <b>ПОДРОБНАЯ СПРАВКА</b>\n"
-    "━━━━━━━━━━━━━━━━━━\n\n"
+HELP_TEXT = '''ℹ️ <b>ПОДРОБНАЯ СПРАВКА</b>
+━━━━━━━━━━━━━━━━━━
 
-    "🔎 <b>1. Поиск билетов</b>\n"
-    "Нажми «Найти билеты» в главном меню. Укажи станцию отправления, "
-    "станцию назначения, дату поездки и количество билетов. Затем выбери "
-    "подходящий поезд и доступные варианты мест.\n\n"
+🔎 <b>1. Поиск билетов</b>
+Нажми «Найти билеты» в главном меню. Последовательно укажи станцию отправления, станцию прибытия, дату поездки и количество пассажиров. Затем бот выполнит поиск и покажет подходящие поезда: номер, маршрут, время отправления и прибытия, типы вагонов, категории мест и стоимость.
 
-    "💰 <b>2. Максимальная цена</b>\n"
-    "При новом поиске или создании мониторинга укажи максимальную стоимость "
-    "одного билета. Это ограничение применяется к каждому билету отдельно. "
-    "Для новой заявки цену нужно указать заново. У уже созданного мониторинга "
-    "свой лимит сохраняется.\n\n"
+💰 <b>2. Максимальная стоимость</b>
+При каждом новом поиске или создании мониторинга укажи максимальную стоимость одного билета. Например, лимит 50 BYN означает, что каждый билет должен стоить не более 50 BYN. При поиске нескольких билетов ограничение применяется к каждому билету отдельно. Для новой заявки цену нужно указать заново; у созданного мониторинга собственный лимит сохраняется.
 
-    "🚆 <b>3. Результаты поиска</b>\n"
-    "Проверяй номер поезда, маршрут, время отправления и прибытия, тип вагона, "
-    "доступность мест и стоимость. Информация о наличии мест может измениться "
-    "до момента оформления заказа.\n\n"
+🚆 <b>3. Как создать мониторинг</b>
+Если подходящих билетов сейчас нет или свободные места отсутствуют, можно создать мониторинг:
+1. Нажми «Найти билеты».
+2. Укажи станции отправления и прибытия.
+3. Выбери дату поездки и количество пассажиров.
+4. Установи максимальную стоимость одного билета.
+5. Выбери нужный поезд из результатов поиска.
+6. Выбери доступные типы вагонов и категории мест, если бот предлагает такой выбор.
+7. Подтверди создание заявки.
 
-    "📋 <b>4. Мои мониторинги</b>\n"
-    "Здесь можно просматривать свои заявки и открывать их подробности. "
-    "В зависимости от состояния мониторинга доступны просмотр истории, "
-    "изменение максимальной цены, управление данными пассажира, остановка, "
-    "возобновление и удаление заявки.\n\n"
+После создания мониторинг появится в разделе «Мои мониторинги». Бот будет автоматически проверять наличие мест с учётом маршрута, даты, поезда, количества билетов и ценового ограничения. Не нужно запускать поиск повторно вручную.
 
-    "🔔 <b>5. Уведомления</b>\n"
-    "Бот сообщает о ходе мониторинга и появлении подходящих мест. "
-    "Важно: сообщение о найденных местах ещё не означает, что билет оформлен. "
-    "Заказ считается созданным только после подтверждения на сайте "
-    "pass.rw.by.\n\n"
+📋 <b>4. Мои мониторинги и управление заявками</b>
+В разделе «Мои мониторинги» открой нужную заявку, чтобы посмотреть её параметры и состояние. В зависимости от состояния доступны:
+• просмотр подробностей и истории проверок;
+• изменение максимальной цены;
+• редактирование сохранённых данных пассажира;
+• остановка мониторинга — временное прекращение проверок;
+• возобновление — продолжение проверок по сохранённым параметрам;
+• удаление ненужной заявки.
 
-    "🎫 <b>6. Автоматическое оформление</b>\n"
-    "Следуй инструкциям бота: авторизуйся на сайте, выбери тип вагона "
-    "и места, затем заполни данные пассажира. Внимательно проверяй введённые "
-    "сведения перед подтверждением.\n\n"
+Изменение цены или данных в одной заявке не должно менять остальные мониторинги. Перед удалением убедись, что заявка больше не нужна.
 
-    "⏱ <b>7. Оплата заказа</b>\n"
-    "После успешного оформления бот отправит уведомление. Обычно на оплату "
-    "остаётся около 20 минут. Точный срок проверяй в сообщении бота и на сайте.\n\n"
+🔔 <b>5. Уведомления и наличие мест</b>
+Бот сообщает о создании заявки, ходе проверок, появлении подходящих мест и результате оформления. Наличие мест и стоимость могут измениться в любой момент: билеты одновременно могут приобретать другие пассажиры. Уведомление о найденном месте ещё не означает, что заказ оформлен.
 
-    "⚠️ <b>8. Важные замечания</b>\n"
-    "• Найденное место не гарантирует успешное оформление.\n"
-    "• Проверяй данные пассажиров и параметры поездки.\n"
-    "• Если результат оформления неизвестен, проверь историю заказов "
-    "на pass.rw.by перед повторной попыткой.\n"
-    "• Мониторинги хранятся в базе данных и восстанавливаются после "
-    "перезапуска бота.\n\n"
+🎫 <b>6. Оформление билета</b>
+Когда появляются подходящие места, бот может перейти к автоматическому оформлению или предложить продолжить действия вручную — в зависимости от сценария заявки. При оформлении могут потребоваться авторизация на pass.rw.by, выбор типа вагона, категории мест, вагона и конкретных мест, а также ввод данных каждого пассажира.
 
-    "Выбери действие ниже."
-)
+Выбирай правильный тип документа и внимательно проверяй фамилию, имя, отчество, номер документа и остальные сведения. При автоматическом оформлении бот может подтвердить финальный шаг заказа в рамках активного мониторинга. После успешного создания заказа он отправит уведомление.
+
+⏱ <b>7. Оплата заказа</b>
+Созданный заказ необходимо оплатить на сайте pass.rw.by. Обычно на оплату остаётся около 20 минут, но точный срок проверяй в уведомлении и на сайте. Успешное создание заказа не означает, что билет уже оплачен.
+
+🔄 <b>8. Восстановление после перезапуска</b>
+Активные мониторинги хранятся в PostgreSQL и восстанавливаются при запуске бота. После обычного перезапуска повторно создавать их не требуется: проверки должны продолжиться с сохранёнными параметрами.
+
+⚠️ <b>9. Важные замечания</b>
+• Проверяй станции, дату, количество билетов и ценовой лимит перед созданием заявки.
+• Найденное место не гарантирует успешное оформление.
+• Следи за уведомлениями и своевременно оплачивай заказ.
+• Если результат оформления неизвестен, сначала проверь историю заказов на pass.rw.by, чтобы не создать повторный заказ.
+• Не передавай посторонним свои учётные данные и документы.
+
+━━━━━━━━━━━━━━━━━━
+🚆 <b>Бот поможет найти билеты, следить за появлением свободных мест и автоматизировать оформление.</b>
+
+Выбери действие ниже 👇'''
 
 
 def help_keyboard() -> InlineKeyboardMarkup:
@@ -384,7 +396,13 @@ async def get_main_menu_data(dialog_manager: DialogManager, **kwargs):
     if notice:
         text += "\n\n" + escape(str(notice))
         dialog_manager.dialog_data.pop("menu_notice", None)
-    return {"main_menu_text": text}
+    settings = load_settings()
+    is_admin = bool(user and user.id in settings.admin_chat_ids)
+
+    return {
+        "main_menu_text": text,
+        "is_admin": is_admin,
+    }
 
 
 async def on_menu_book(callback, button, dialog_manager):
@@ -1228,23 +1246,26 @@ async def _open_help_message(
     callback: CallbackQuery,
     dialog_manager: DialogManager,
 ) -> None:
-    """Отправляет отдельное сообщение справки и удаляет прежнее меню."""
-    await callback.answer()
-
+    """Показывает справку в том же сообщении, где было главное меню."""
     if not isinstance(callback.message, Message):
+        await callback.answer()
         return
 
-    # Сначала отправляем справку, чтобы не потерять меню при ошибке отправки.
-    await callback.message.answer(
-        HELP_TEXT,
-        reply_markup=help_keyboard(),
-        parse_mode="HTML",
-    )
-
     try:
-        await callback.message.delete()
+        await callback.message.edit_text(
+            HELP_TEXT,
+            reply_markup=help_keyboard(),
+            parse_mode="HTML",
+        )
     except Exception:
-        logger.warning("Не удалось удалить меню после открытия справки", exc_info=True)
+        logger.exception("Не удалось открыть справку в текущем сообщении")
+        await callback.answer(
+            "Не удалось открыть справку. Попробуйте ещё раз.",
+            show_alert=True,
+        )
+        return
+
+    await callback.answer()
 
 
 async def _close_help_message(
@@ -1386,6 +1407,184 @@ async def on_monitor_delete_after_booking(callback: CallbackQuery, monitor_servi
         except Exception:
             pass
     await callback.answer("Мониторинг удалён. Повторный поиск не запустится.", show_alert=True)
+
+
+
+def _collect_admin_log_lines(
+    log_file: Path,
+    *,
+    errors_only: bool = False,
+    max_bytes: int = 15 * 1024 * 1024,
+) -> tuple[list[str], bool]:
+    """Собирает безопасные JSON-записи за последние 24 часа из активного и ротированных логов."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    paths = [log_file, *(Path(f"{log_file}.{index}") for index in range(1, 8))]
+    existing = sorted(
+        (path for path in paths if path.is_file()),
+        key=lambda path: path.stat().st_mtime,
+    )
+
+    allowed_fields = {
+        "timestamp",
+        "level",
+        "service_name",
+        "logger",
+        "message",
+        "module",
+        "function",
+        "line",
+        "exception",
+        "exception_type",
+        "stage",
+        "event",
+        "duration_ms",
+    }
+
+    collected: list[str] = []
+    total_bytes = 0
+    truncated = False
+
+    for path in existing:
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as source:
+                for raw_line in source:
+                    try:
+                        record = json.loads(raw_line)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+
+                    timestamp = record.get("timestamp")
+                    if not isinstance(timestamp, str):
+                        continue
+                    try:
+                        parsed_timestamp = datetime.fromisoformat(
+                            timestamp.replace("Z", "+00:00")
+                        )
+                        if parsed_timestamp.tzinfo is None:
+                            parsed_timestamp = parsed_timestamp.replace(
+                                tzinfo=timezone.utc
+                            )
+                        parsed_timestamp = parsed_timestamp.astimezone(timezone.utc)
+                    except ValueError:
+                        continue
+
+                    if parsed_timestamp < cutoff:
+                        continue
+
+                    level = str(record.get("level", "")).upper()
+                    if errors_only and level not in {"ERROR", "CRITICAL"}:
+                        continue
+
+                    safe_record = {}
+                    for key in allowed_fields:
+                        if key not in record:
+                            continue
+                        value = record[key]
+                        if isinstance(value, str):
+                            value = redact_sensitive_text(value)
+                        safe_record[key] = value
+
+                    line = json.dumps(
+                        safe_record,
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                    collected.append(line)
+                    total_bytes += len(line.encode("utf-8")) + 1
+
+                    # Не даём выгрузке превысить безопасный размер Telegram-документа.
+                    while total_bytes > max_bytes and collected:
+                        removed = collected.pop(0)
+                        total_bytes -= len(removed.encode("utf-8")) + 1
+                        truncated = True
+        except OSError:
+            logger.exception("Не удалось прочитать файл журнала %s", path)
+
+    return collected, truncated
+
+
+async def _send_admin_log_file(
+    callback: CallbackQuery,
+    *,
+    errors_only: bool = False,
+) -> None:
+    settings = load_settings()
+
+    # Проверка прав выполняется на сервере независимо от видимости кнопки.
+    if callback.from_user.id not in settings.admin_chat_ids:
+        await callback.answer("Доступ запрещён.", show_alert=True)
+        return
+
+    log_file = Path(
+        os.getenv("LOG_FILE", "/var/log/bzhd_bot/app.json.log")
+    )
+
+    try:
+        lines, truncated = _collect_admin_log_lines(
+            log_file,
+            errors_only=errors_only,
+        )
+
+        if not lines:
+            message = (
+                "За последние 24 часа ошибок не найдено."
+                if errors_only
+                else "За последние 24 часа записей в журнале не найдено."
+            )
+            await callback.answer(message, show_alert=True)
+            return
+
+        header = (
+            "Журнал ошибок приложения за последние 24 часа.\n"
+            if errors_only
+            else "Журнал приложения за последние 24 часа.\n"
+        )
+        header += (
+            "Персональные идентификаторы исключены; чувствительные значения маскированы.\n"
+        )
+        if truncated:
+            header += "Внимание: файл ограничен по размеру, оставлены наиболее новые записи.\n"
+        header += "\n"
+
+        content = header + "\n".join(lines)
+        document = BufferedInputFile(
+            content.encode("utf-8"),
+            filename=(
+                "bzhd_bot_errors_24h.jsonl"
+                if errors_only
+                else "bzhd_bot_logs_24h.jsonl"
+            ),
+        )
+
+        await callback.answer("Готовлю файл журнала.")
+        if isinstance(callback.message, Message):
+            await callback.message.answer_document(
+                document=document,
+                caption=(
+                    f"Записей: {len(lines)}. Период: последние 24 часа."
+                    + (" Файл ограничен по размеру." if truncated else "")
+                ),
+            )
+    except Exception:
+        logger.exception("Не удалось подготовить журнал для администратора")
+        await callback.answer(
+            "Не удалось подготовить файл журнала.",
+            show_alert=True,
+        )
+
+
+async def on_admin_logs(callback: CallbackQuery, button=None, dialog_manager=None):
+    """Отправляет администратору полный журнал приложения за последние 24 часа."""
+    await _send_admin_log_file(callback, errors_only=False)
+
+
+async def on_admin_error_logs(
+    callback: CallbackQuery,
+    button=None,
+    dialog_manager=None,
+):
+    """Отправляет администратору ошибки ERROR/CRITICAL за последние 24 часа."""
+    await _send_admin_log_file(callback, errors_only=True)
 
 
 def register_commands(router: Router):

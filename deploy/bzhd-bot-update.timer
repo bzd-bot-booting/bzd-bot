@@ -1,0 +1,11 @@
+[Unit]
+Description=Check BZHD bot updates every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Persistent=true
+Unit=bzhd-bot-update.service
+
+[Install]
+WantedBy=timers.target

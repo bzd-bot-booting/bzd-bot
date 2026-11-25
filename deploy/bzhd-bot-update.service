@@ -1,0 +1,15 @@
+[Unit]
+Description=BZHD bot source updater
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=BZHDBOT_ROOT=/home/vadim/bzhd_bot
+Environment=BZHDBOT_BRANCH=main
+Environment=BZHDBOT_REPOSITORY=https://github.com/bzd-bot-booting/bzd-bot.git
+Environment=BZHDBOT_COMPOSE_PROJECT=bzhd-local
+Environment=BZHDBOT_STATE_DIR=/var/lib/bzhd-bot-updater
+ExecStart=/home/vadim/bzhd_bot/deploy/update-bot.sh
