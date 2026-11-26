@@ -2173,6 +2173,7 @@ async def on_home_dialog(
     manager: DialogManager,
 ):
     """Return to the main menu from any dialog step without risking a duplicate order."""
+    await callback.answer("Возвращаемся в главное меню")
     chat_id = callback.message.chat.id if callback.message else callback.from_user.id
     data = manager.dialog_data
 
@@ -2218,7 +2219,6 @@ async def on_home_dialog(
     data.clear()
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(BookingSG.main_menu)
-    await callback.answer("Главное меню")
 
 
 @router.callback_query(F.data == "booking:home")
@@ -3059,7 +3059,7 @@ async def on_passenger_data_confirmation(
                 )
             lines.extend([
                 "",
-                "💳 <b>Оплатить:</b> https://pass.rw.by/ru/order/payment/",
+                '<b>💳 Оплатить:</b> <a href="https://pass.rw.by/ru/order/payment/">Перейти к оплате</a>',
                 "",
             ])
 
@@ -3082,7 +3082,8 @@ async def on_passenger_data_confirmation(
                 )
 
             await callback.message.answer(
-                "\\n".join(lines),
+                "\n".join(lines),
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
