@@ -1107,12 +1107,20 @@ class AutomaticBookingWorker:
                     order_expires_at=result.get("order_expires_at"),
                 )
                 await self.monitor.finish_automatic_booking(job, "confirmed")
-                delete_keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="🗑 Удалить мониторинг",
-                        callback_data=f"mon_del:{job.id}",
-                    )
-                ]])
+                delete_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🗑 Удалить мониторинг",
+                            callback_data=f"mon_del:{job.id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Домой",
+                            callback_data="booking:home",
+                        )
+                    ],
+                ])
                 await self._notify(job.chat_id, confirmation_message, reply_markup=delete_keyboard)
                 return
 
@@ -1338,12 +1346,20 @@ class AutomaticBookingWorker:
                     order_expires_at=outcome.get("order_expires_at"),
                 )
                 await self.monitor.finish_automatic_booking(job, "confirmed")
-                delete_keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="🗑 Удалить мониторинг",
-                        callback_data=f"mon_del:{job.id}",
-                    )
-                ]])
+                delete_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🗑 Удалить мониторинг",
+                            callback_data=f"mon_del:{job.id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Домой",
+                            callback_data="booking:home",
+                        )
+                    ],
+                ])
                 await self._notify(job.chat_id, confirmation_message, reply_markup=delete_keyboard)
                 return
 
