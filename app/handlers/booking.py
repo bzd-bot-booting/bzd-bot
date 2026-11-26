@@ -18,7 +18,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     FSInputFile,
 )
-from aiogram_dialog import DialogManager, ShowMode
+from aiogram_dialog import DialogManager, ShowMode, StartMode
 from aiogram_dialog.widgets.kbd import Button
 
 from app.config import Settings
@@ -2174,6 +2174,17 @@ async def on_home_dialog(
 ):
     """Return to the main menu from any dialog step without risking a duplicate order."""
     await callback.answer("Возвращаемся в главное меню")
+
+    # После оформления заказа активного диалога может уже не быть.
+    # В таком случае запускаем главное меню как новый диалог.
+    if not manager.has_context():
+        manager.show_mode = ShowMode.SEND
+        await manager.start(
+            BookingSG.main_menu,
+            mode=StartMode.RESET_STACK,
+        )
+        return
+
     chat_id = callback.message.chat.id if callback.message else callback.from_user.id
     data = manager.dialog_data
 
