@@ -57,6 +57,8 @@ from app.handlers.booking import (
     get_passenger_confirmation_data,
 )
 from app.handlers.commands import (
+    HELP_TEXT,
+    on_help_back,
     get_main_menu_data,
     on_menu_book,
     on_menu_monitors,
@@ -1073,6 +1075,16 @@ booking_dialog = Dialog(
         ),
         state=BookingSG.main_menu,
         getter=get_main_menu_data,
+    ),
+
+    Window(
+        Const(HELP_TEXT),
+        Button(
+            Const("◀️ Назад"),
+            id="help_back",
+            on_click=on_help_back,
+        ),
+        state=BookingSG.help,
     ),
 
     # Раздел «Мои мониторинги». Все экраны ниже редактируют одно сообщение.

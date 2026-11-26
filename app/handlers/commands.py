@@ -454,7 +454,13 @@ async def on_menu_stop(callback, button, dialog_manager):
 
 
 async def on_menu_help(callback, button, dialog_manager):
-    await _open_help_message(callback, dialog_manager)
+    await callback.answer()
+    await dialog_manager.switch_to(BookingSG.help)
+
+
+async def on_help_back(callback, button, dialog_manager):
+    await callback.answer()
+    await dialog_manager.switch_to(BookingSG.main_menu)
 
 def _dialog_chat_id(dialog_manager: DialogManager) -> int:
     event = dialog_manager.event

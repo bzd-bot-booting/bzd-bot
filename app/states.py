@@ -37,6 +37,7 @@ class BookingSG(StatesGroup):
 
     # Главное меню и раздел управления мониторингами
     main_menu = State()
+    help = State()
     my_monitors = State()
     monitor_details = State()
     monitor_profile = State()
