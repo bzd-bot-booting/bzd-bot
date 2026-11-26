@@ -30,7 +30,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta, timezone
 from app.database.engine import SessionFactory
 from app.database.models import User, Monitor, Subscription
-from app.middlewares.message_cleanup import clear_chat_messages, active_dialog_message_id
+from app.middlewares.message_cleanup import clear_chat_messages, active_dialog_message_id, tracked_message_ids
 
 logger = logging.getLogger(__name__)
 
@@ -259,15 +259,41 @@ async def save_user(message: Message) -> None:
     )
 
 
-async def _clear_previous_chat_messages(bot, chat_id: int, dialog_manager: DialogManager) -> None:
-    """Delete all previously tracked bot messages, retaining the active dialog anchor."""
-    keep_id = active_dialog_message_id(dialog_manager)
-    deleted = await clear_chat_messages(bot, chat_id, keep_message_id=keep_id)
-    logger.info("Очистка чата %s перед командой: удалено сообщений бота=%s", chat_id, deleted)
+async def _clear_previous_chat_messages(
+    bot,
+    chat_id: int,
+    dialog_manager: DialogManager,
+    preserve_dialog_message: bool = True,
+) -> None:
+    """Удаляет зарегистрированные сообщения бота, при необходимости сохраняя окно диалога."""
+    tracked_before = tracked_message_ids(chat_id)
+    keep_id = (
+        active_dialog_message_id(dialog_manager)
+        if preserve_dialog_message
+        else None
+    )
+    deleted = await clear_chat_messages(
+        bot,
+        chat_id,
+        keep_message_id=keep_id,
+    )
+    logger.info(
+        "Очистка чата %s: зарегистрировано=%s, сохранено message_id=%s, удалено=%s",
+        chat_id,
+        len(tracked_before),
+        keep_id,
+        deleted,
+    )
 
 
 async def cmd_start(message: Message, dialog_manager: DialogManager):
-    await _clear_previous_chat_messages(message.bot, message.chat.id, dialog_manager)
+    # При /start удаляем и старое окно диалога.
+    await _clear_previous_chat_messages(
+        message.bot,
+        message.chat.id,
+        dialog_manager,
+        preserve_dialog_message=False,
+    )
     if dialog_manager.has_context():
         await _reset_for_new_search(dialog_manager, message.chat.id)
     try:
@@ -283,6 +309,8 @@ async def cmd_start(message: Message, dialog_manager: DialogManager):
         else None
     )
 
+    # Старое сообщение диалога уже удалено — отправляем новое меню.
+    dialog_manager.show_mode = ShowMode.SEND
     await dialog_manager.start(
         BookingSG.main_menu,
         mode=StartMode.RESET_STACK,
@@ -1246,26 +1274,31 @@ async def _open_help_message(
     callback: CallbackQuery,
     dialog_manager: DialogManager,
 ) -> None:
-    """Показывает справку в том же сообщении, где было главное меню."""
+    """Отправляет отдельное сообщение справки и удаляет прежнее меню."""
+    await callback.answer()
+
     if not isinstance(callback.message, Message):
-        await callback.answer()
         return
 
+    # Сначала отправляем справку, чтобы не потерять меню при ошибке отправки.
     try:
-        await callback.message.edit_text(
+        await callback.message.answer(
             HELP_TEXT,
             reply_markup=help_keyboard(),
             parse_mode="HTML",
         )
     except Exception:
-        logger.exception("Не удалось открыть справку в текущем сообщении")
-        await callback.answer(
-            "Не удалось открыть справку. Попробуйте ещё раз.",
-            show_alert=True,
-        )
+        logger.exception("Не удалось отправить сообщение справки")
         return
 
-    await callback.answer()
+    # Старое сообщение меню удаляется только после успешной отправки справки.
+    try:
+        await callback.message.delete()
+    except Exception:
+        logger.warning(
+            "Не удалось удалить меню после открытия справки",
+            exc_info=True,
+        )
 
 
 async def _close_help_message(

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # In-memory registry of bot messages in private chats. The dialog's current
 # message can be preserved while all older bot messages are removed.
-_REGISTRY_PATH = Path("data/telegram_message_registry.json")
+_REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "telegram_message_registry.json"
 _CHAT_MESSAGES: dict[int, set[int]] = defaultdict(set)
 
 
@@ -66,6 +66,11 @@ async def track_outgoing_messages(make_request, bot, method):
     for message in messages:
         if message.chat and message.chat.type == ChatType.PRIVATE and message.message_id:
             track_message(message.chat.id, message.message_id)
+            logger.debug(
+                "Зарегистрировано сообщение бота: chat_id=%s message_id=%s",
+                message.chat.id,
+                message.message_id,
+            )
 
     # Successful explicit deletion should also update the registry.
     method_name = getattr(method, "__api_method__", "")
