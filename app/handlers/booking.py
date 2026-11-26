@@ -22,7 +22,7 @@ from aiogram_dialog import DialogManager, ShowMode, StartMode
 from aiogram_dialog.widgets.kbd import Button
 
 from app.config import Settings
-from app.middlewares.message_cleanup import clear_chat_messages, cleanup_after_back
+from app.middlewares.message_cleanup import clear_chat_messages, cleanup_after_back, forget_message
 from app.services.monitoring import MonitorService
 from app.services.rw_parser import RWParser, ScheduleUnavailable
 from app.states import BookingSG
@@ -2178,6 +2178,25 @@ async def on_home_dialog(
     # После оформления заказа активного диалога может уже не быть.
     # В таком случае запускаем главное меню как новый диалог.
     if not manager.has_context():
+        # Удаляем сообщение с уведомлением, на кнопке которого нажали «Домой».
+        # Сам заказ и его состояние в базе данных не затрагиваются.
+        if callback.message:
+            try:
+                await callback.bot.delete_message(
+                    chat_id=callback.message.chat.id,
+                    message_id=callback.message.message_id,
+                )
+            except Exception:
+                logger.warning(
+                    "Не удалось удалить сообщение перед возвратом в меню",
+                    exc_info=True,
+                )
+            finally:
+                forget_message(
+                    callback.message.chat.id,
+                    callback.message.message_id,
+                )
+
         manager.show_mode = ShowMode.SEND
         await manager.start(
             BookingSG.main_menu,
